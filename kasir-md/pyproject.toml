@@ -1,0 +1,5 @@
+[project]
+name = "kasir-ringan-md"
+version = "1.0.0"
+description = "Aplikasi Kasir Ringan dengan Database Markdown"
+dependencies = ["flet"]
