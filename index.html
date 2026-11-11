@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kasir Ringan MD</title>
+<style>
+  body { font-family: sans-serif; padding: 15px; max-width: 500px; margin: auto; background: #f9f9f9; }
+  input { width: 100%; padding: 10px; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
+  .produk-btn { display: block; width: 100%; padding: 12px; margin: 5px 0; font-size: 16px; text-align: left; background: #fff; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
+  .bayar-btn { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: #28a745; color: white; border: none; border-radius: 6px; margin-top: 10px; cursor: pointer; }
+  .reset-btn { width: 100%; padding: 10px; font-size: 14px; font-weight: bold; background: #6c757d; color: white; border: none; border-radius: 6px; margin-top: 8px; cursor: pointer; }
+  .rekap-btn { width: 100%; padding: 12px; font-size: 15px; font-weight: bold; background: #007bff; color: white; border: none; border-radius: 6px; margin-top: 15px; cursor: pointer; }
+  .hapus-btn { background: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 10px; font-size: 14px; font-weight: bold; cursor: pointer; }
+  .cepat-grid { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+  .cepat-btn { flex: 1; padding: 8px 4px; font-size: 13px; background: #e2e6ea; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  .item-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #ddd; }
+  .box { background: white; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #ddd; }
+  .kembali-box { background: #eef9f1; padding: 10px; border-radius: 6px; border: 1px solid #b8e2c4; margin-top: 5px; }
+  pre { background: #eee; padding: 10px; overflow-x: auto; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h2>KASIR TOKO (DATABASE MD)</h2>
+  <input type="text" id="cari" placeholder="Cari nama barang..." onkeyup="filterProduk()">
+  <div id="daftar-produk">Memuat data...</div>
+  
+  <div class="box">
+    <h3>Keranjang Belanja</h3>
+    <div id="keranjang">Belum ada barang</div>
+    <h3 id="total">Total: Rp 0</h3>
+    <label><b>Uang Tunai (Rp):</b></label>
+    <input type="number" id="input-tunai" placeholder="Masukkan uang tunai..." oninput="hitungKembalian()">
+    <div class="cepat-grid">
+      <button class="cepat-btn" onclick="setUangPas()">Uang Pas</button>
+      <button class="cepat-btn" onclick="tambahTunai(10000)">+10rb</button>
+      <button class="cepat-btn" onclick="tambahTunai(20000)">+20rb</button>
+      <button class="cepat-btn" onclick="tambahTunai(50000)">+50rb</button>
+      <button class="cepat-btn" onclick="tambahTunai(100000)">+100rb</button>
+    </div>
+    <div class="kembali-box">
+      <strong id="teks-kembalian" style="font-size: 18px; color: #155724;">Kembalian: Rp 0</strong>
+    </div>
+    <button class="bayar-btn" onclick="prosesBayar()">Bayar & Cetak Struk</button>
+    <button class="reset-btn" onclick="kosongkanKeranjang()">Batalkan Semua</button>
+  </div>
+
+  <div class="box" id="box-struk" style="display:none;">
+    <h3>Struk Tersimpan</h3>
+    <pre id="isi-struk"></pre>
+    <small id="info-file"></small>
+  </div>
+
+  <button class="rekap-btn" onclick="cekRekapHarian()">Lihat & Simpan Rekap Hari Ini</button>
+  <div class="box" id="box-rekap" style="display:none; border-color: #007bff;">
+    <h3 style="color: #007bff; margin-top: 0;">Rekap Penjualan Hari Ini</h3>
+    <p id="ringkasan-omzet" style="font-size: 16px;"></p>
+    <pre id="isi-rekap"></pre>
+    <small id="info-file-rekap"></small>
+  </div>
+
+<script>
+  let katalog = [], keranjang = [], totalBelanja = 0;
+
+  fetch('/api/produk').then(r => r.json()).then(data => {
+    katalog = data;
+    tampilkanProduk(katalog);
+  });
+
+  function tampilkanProduk(list) {
+    const div = document.getElementById('daftar-produk');
+    div.innerHTML = list.length ? '' : '<i>Data barang kosong.</i>';
+    list.forEach(item => {
+      div.innerHTML += `<button class="produk-btn" onclick='tambah(${JSON.stringify(item)})'>${item.nama} - Rp ${item.harga.toLocaleString()}</button>`;
+    });
+  }
+
+  function filterProduk() {
+    const q = document.getElementById('cari').value.toLowerCase();
+    tampilkanProduk(katalog.filter(i => i.nama.toLowerCase().includes(q)));
+  }
+
+  function tambah(item) { keranjang.push(item); updateKeranjang(); }
+  function hapusItem(index) { keranjang.splice(index, 1); updateKeranjang(); }
+  function kosongkanKeranjang() { keranjang = []; document.getElementById('input-tunai').value = ''; updateKeranjang(); }
+  function setUangPas() { document.getElementById('input-tunai').value = totalBelanja; hitungKembalian(); }
+  function tambahTunai(nom) {
+    const inp = document.getElementById('input-tunai');
+    inp.value = (parseInt(inp.value) || 0) + nom;
+    hitungKembalian();
+  }
+
+  function hitungKembalian() {
+    const tunai = parseInt(document.getElementById('input-tunai').value) || 0;
+    const kembali = tunai - totalBelanja;
+    const teks = document.getElementById('teks-kembalian');
+    if (totalBelanja === 0) { teks.innerText = 'Kembalian: Rp 0'; teks.style.color = '#155724'; }
+    else if (kembali < 0) { teks.innerText = 'Kurang: Rp ' + Math.abs(kembali).toLocaleString(); teks.style.color = '#dc3545'; }
+    else { teks.innerText = 'Kembalian: Rp ' + kembali.toLocaleString(); teks.style.color = '#155724'; }
+  }
+
+  function updateKeranjang() {
+    const div = document.getElementById('keranjang');
+    totalBelanja = 0;
+    if (keranjang.length === 0) {
+      div.innerHTML = 'Belum ada barang';
+      document.getElementById('total').innerText = 'Total: Rp 0';
+      hitungKembalian();
+      return;
+    }
+    let html = '';
+    keranjang.forEach((i, idx) => {
+      totalBelanja += i.harga;
+      html += `<div class="item-row"><span>${i.nama} (Rp ${i.harga.toLocaleString()})</span><button class="hapus-btn" onclick="hapusItem(${idx})">X</button></div>`;
+    });
+    div.innerHTML = html;
+    document.getElementById('total').innerText = 'Total: Rp ' + totalBelanja.toLocaleString();
+    hitungKembalian();
+  }
+
+  function prosesBayar() {
+    if (!keranjang.length) return alert('Keranjang masih kosong!');
+    const tunai = parseInt(document.getElementById('input-tunai').value) || 0;
+    if (tunai < totalBelanja) return alert('Uang tunai kurang!');
+    fetch('/api/bayar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ keranjang, total: totalBelanja, tunai, kembalian: tunai - totalBelanja })
+    }).then(r => r.json()).then(res => {
+      document.getElementById('box-struk').style.display = 'block';
+      document.getElementById('isi-struk').innerText = res.struk;
+      document.getElementById('info-file').innerText = 'Arsip disimpan di: ' + res.file;
+      kosongkanKeranjang();
+    });
+  }
+
+  function cekRekapHarian() {
+    fetch('/api/rekap').then(r => r.json()).then(res => {
+      document.getElementById('box-rekap').style.display = 'block';
+      document.getElementById('ringkasan-omzet').innerHTML = `Tanggal: <b>${res.tanggal}</b> | Transaksi: <b>${res.jumlah_trx}</b><br>Total Omzet: <b style="color:#28a745; font-size:20px;">Rp ${res.total_omzet.toLocaleString()}</b>`;
+      document.getElementById('isi-rekap').innerText = res.teks_laporan;
+      document.getElementById('info-file-rekap').innerText = 'Disimpan di: ' + res.file;
+    });
+  }
+</script>
+</body>
+</html>
